@@ -20,6 +20,7 @@ use sctk::output::{OutputHandler, OutputHandling, OutputInfo, OutputStatusListen
 use sctk::seat::{SeatData, SeatHandler, SeatHandling, SeatListener};
 use sctk::shell::{Shell, ShellHandler, ShellHandling};
 use sctk::shm::ShmHandler;
+use wayland_client::protocol::wl_data_device_manager::WlDataDeviceManager;
 
 /// Set of extra features that are supported by the compositor.
 #[derive(Debug, Clone, Copy)]
@@ -61,6 +62,7 @@ sctk::environment!(WinitEnv,
         ZwpPointerConstraintsV1 => pointer_constraints,
         ZwpTextInputManagerV3 => text_input_manager,
         XdgActivationV1 => xdg_activation,
+        WlDataDeviceManager => data_device_manager,
     ],
     multis = [
         WlSeat => seats,
@@ -91,6 +93,8 @@ pub struct WinitEnv {
     decoration_manager: SimpleGlobal<ZxdgDecorationManagerV1>,
 
     xdg_activation: SimpleGlobal<XdgActivationV1>,
+
+    data_device_manager: SimpleGlobal<WlDataDeviceManager>,
 }
 
 impl WinitEnv {
@@ -125,6 +129,9 @@ impl WinitEnv {
         // Surface activation.
         let xdg_activation = SimpleGlobal::new();
 
+        // Data device manager for drag and drop
+        let data_device_manager = SimpleGlobal::new();
+
         Self {
             seats,
             outputs,
@@ -137,6 +144,7 @@ impl WinitEnv {
             pointer_constraints,
             text_input_manager,
             xdg_activation,
+            data_device_manager,
         }
     }
 }

@@ -14,6 +14,9 @@ use sctk::environment::Environment;
 use sctk::reexports::calloop::LoopHandle;
 use sctk::seat::pointer::ThemeManager;
 use sctk::seat::{SeatData, SeatListener};
+use sctk::data_device::{DataDevice, DndEvent};
+use wayland_client::DispatchData;
+use wayland_client::protocol::wl_data_device_manager::WlDataDeviceManager;
 
 use super::env::WinitEnv;
 use super::event_loop::WinitState;
@@ -23,11 +26,23 @@ mod keyboard;
 pub mod pointer;
 pub mod text_input;
 mod touch;
+mod drop;
 
 use keyboard::Keyboard;
 use pointer::Pointers;
 use text_input::TextInput;
 use touch::Touch;
+
+pub fn drag_and_drop_cb(dnd_event: DndEvent<'_>, dispatch_data: DispatchData<'_>) {
+    match dnd_event {
+        DndEvent::Enter{..} => println!("Enter..."),
+        DndEvent::Motion{..} => println!("Motion..."),
+        DndEvent::Drop{..} => println!("Drop..."),
+        DndEvent::Leave => println!("Leave..."),
+    };
+    //println!("{:?}", dnd_event);
+    //println!("{:?}", dispatch_data);
+}
 
 pub struct SeatManager {
     /// Listener for seats.
@@ -43,12 +58,14 @@ impl SeatManager {
         let relative_pointer_manager = env.get_global::<ZwpRelativePointerManagerV1>();
         let pointer_constraints = env.get_global::<ZwpPointerConstraintsV1>();
         let text_input_manager = env.get_global::<ZwpTextInputManagerV3>();
+        let data_device_manager = env.get_global::<WlDataDeviceManager>();
 
         let mut inner = SeatManagerInner::new(
             theme_manager,
             relative_pointer_manager,
             pointer_constraints,
             text_input_manager,
+            data_device_manager,
             loop_handle,
         );
 
@@ -89,6 +106,9 @@ struct SeatManagerInner {
     /// Text input manager.
     text_input_manager: Option<Attached<ZwpTextInputManagerV3>>,
 
+    /// Data device manager.
+    data_device_manager: Option<Attached<WlDataDeviceManager>>,
+
     /// A theme manager.
     theme_manager: ThemeManager,
 }
@@ -99,6 +119,7 @@ impl SeatManagerInner {
         relative_pointer_manager: Option<Attached<ZwpRelativePointerManagerV1>>,
         pointer_constraints: Option<Attached<ZwpPointerConstraintsV1>>,
         text_input_manager: Option<Attached<ZwpTextInputManagerV3>>,
+        data_device_manager: Option<Attached<WlDataDeviceManager>>,
         loop_handle: LoopHandle<'static, WinitState>,
     ) -> Self {
         Self {
@@ -107,6 +128,7 @@ impl SeatManagerInner {
             relative_pointer_manager,
             pointer_constraints,
             text_input_manager,
+            data_device_manager,
             theme_manager,
         }
     }
@@ -168,6 +190,12 @@ impl SeatManagerInner {
                 seat_info.text_input = Some(TextInput::new(seat, text_input_manager));
             }
         }
+
+        if let Some(data_device_manager) = self.data_device_manager.as_ref() {
+            if seat_info.data_device.is_none() {
+                seat_info.data_device = Some(DataDevice::init_for_seat(data_device_manager, seat, drag_and_drop_cb));
+            }
+        }
     }
 }
 
@@ -188,6 +216,9 @@ struct SeatInfo {
     /// Text input handling aka IME.
     text_input: Option<TextInput>,
 
+    /// Data device.
+    data_device: Option<DataDevice>,
+
     /// The current state of modifiers observed in keyboard handler.
     ///
     /// We keep modifiers state on a seat, since it's being used by pointer events as well.
@@ -202,6 +233,7 @@ impl SeatInfo {
             pointer: None,
             touch: None,
             text_input: None,
+            data_device: None,
             modifiers_state: Rc::new(RefCell::new(ModifiersState::default())),
         }
     }
